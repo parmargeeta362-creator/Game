@@ -26,6 +26,16 @@ export function joinRoomChannel(
 ): RealtimeChannel {
   const channelName = `snake-room-${roomCode.trim().toUpperCase()}`;
 
+  // Clean up existing registered channel with this topic if any
+  try {
+    const existing = supabase
+      .getChannels()
+      .find((c) => c.topic === `realtime:${channelName}` || c.topic === channelName);
+    if (existing) {
+      supabase.removeChannel(existing);
+    }
+  } catch {}
+
   const channel = supabase.channel(channelName, {
     config: {
       broadcast: { self: false },
@@ -33,7 +43,37 @@ export function joinRoomChannel(
     },
   });
 
-  // 1. Listen for broadcast events (dice rolls, player moves, game start, emojis)
+  // Helper to extract and deduplicate active room users
+  const syncPresence = () => {
+    try {
+      const state = channel.presenceState();
+      const activeUsers: RoomPresenceState[] = [];
+      const seen = new Set<string>();
+
+      Object.values(state).forEach((presenceArray) => {
+        if (Array.isArray(presenceArray)) {
+          presenceArray.forEach((p: any) => {
+            if (p && p.userId && !seen.has(p.userId)) {
+              seen.add(p.userId);
+              activeUsers.push(p as RoomPresenceState);
+            }
+          });
+        }
+      });
+
+      // Always guarantee current user is included in presence
+      if (!seen.has(userPresence.userId)) {
+        activeUsers.unshift(userPresence);
+      }
+
+      callbacks.onPresenceSync(activeUsers);
+    } catch (err) {
+      console.warn('Error reading presence state:', err);
+      callbacks.onPresenceSync([userPresence]);
+    }
+  };
+
+  // 1. Listen for broadcast events (dice rolls, player moves, game start, chat, emojis)
   channel.on(
     'broadcast',
     { event: 'GAME_EVENT' },
@@ -44,27 +84,28 @@ export function joinRoomChannel(
     }
   );
 
-  // 2. Track online presence in room
-  channel.on('presence', { event: 'sync' }, () => {
-    const state = channel.presenceState();
-    const activeUsers: RoomPresenceState[] = [];
+  // 2. Track online presence in room on sync, join and leave events
+  channel.on('presence', { event: 'sync' }, syncPresence);
+  channel.on('presence', { event: 'join' }, syncPresence);
+  channel.on('presence', { event: 'leave' }, syncPresence);
 
-    Object.values(state).forEach((presenceArray) => {
-      if (Array.isArray(presenceArray)) {
-        presenceArray.forEach((p) => {
-          activeUsers.push(p as unknown as RoomPresenceState);
-        });
-      }
-    });
-
-    callbacks.onPresenceSync(activeUsers);
-  });
+  // Immediately invoke with self so room list never shows 0 players
+  callbacks.onPresenceSync([userPresence]);
 
   // Subscribe to channel and track presence
   channel.subscribe(async (status) => {
     callbacks.onStatusChange?.(status);
     if (status === 'SUBSCRIBED') {
-      await channel.track(userPresence);
+      try {
+        await channel.track(userPresence);
+      } catch (err) {
+        console.warn('Presence track error:', err);
+      }
+
+      // Broadcast join event directly to notify any connected peers immediately
+      try {
+        await broadcastRoomEvent(channel, 'PLAYER_JOINED', userPresence, userPresence.userId);
+      } catch {}
     }
   });
 
@@ -99,7 +140,11 @@ export async function broadcastRoomEvent(
  */
 export async function leaveRoomChannel(channel: RealtimeChannel | null): Promise<void> {
   if (channel) {
-    await channel.untrack();
-    await supabase.removeChannel(channel);
+    try {
+      await channel.untrack();
+    } catch {}
+    try {
+      await supabase.removeChannel(channel);
+    } catch {}
   }
 }

@@ -541,7 +541,46 @@ export default function App() {
     (event: RoomBroadcastEvent) => {
       if (event.senderId === profile.id) return; // ignore self-broadcast
 
-      if (event.type === 'ROLL_DICE') {
+      if (event.type === 'PLAYER_JOINED') {
+        const joinedPlayer = event.payload as RoomPresenceState;
+        if (joinedPlayer && joinedPlayer.userId) {
+          setConnectedRoomPlayers((prev) => {
+            if (prev.some((p) => p.userId === joinedPlayer.userId)) {
+              return prev;
+            }
+            return [...prev, joinedPlayer];
+          });
+
+          // Handshake: Reply with my presence so the new peer immediately receives it
+          if (roomChannelRef.current) {
+            const myPresence: RoomPresenceState = {
+              userId: profile.id,
+              name: profile.name,
+              avatar: profile.photoUrl,
+              frame: profile.frame,
+              title: profile.title,
+              isHost: isHost,
+              joinedAt: Date.now(),
+            };
+            broadcastRoomEvent(
+              roomChannelRef.current,
+              'SYNC_STATE',
+              { presence: myPresence },
+              profile.id
+            ).catch(() => {});
+          }
+        }
+      } else if (event.type === 'SYNC_STATE') {
+        const incoming = event.payload?.presence as RoomPresenceState;
+        if (incoming && incoming.userId) {
+          setConnectedRoomPlayers((prev) => {
+            if (prev.some((p) => p.userId === incoming.userId)) {
+              return prev;
+            }
+            return incoming.isHost ? [incoming, ...prev] : [...prev, incoming];
+          });
+        }
+      } else if (event.type === 'ROLL_DICE') {
         const { roll, playerIndex } = event.payload;
         executeRollAndMove(roll, playerIndex);
       } else if (event.type === 'GAME_START') {
@@ -587,7 +626,7 @@ export default function App() {
         setUnreadChatCount((prev) => prev + 1);
       }
     },
-    [profile.id, executeRollAndMove, handleRestart]
+    [profile, isHost, executeRollAndMove, handleRestart]
   );
 
   // Send text chat message in online room
@@ -636,6 +675,11 @@ export default function App() {
 
   // Create Online Room (Host)
   const handleCreateRoom = (maxPlayers: number) => {
+    if (roomChannelRef.current) {
+      leaveRoomChannel(roomChannelRef.current).catch(() => {});
+      roomChannelRef.current = null;
+    }
+
     const code = 'SNAKE-' + Math.floor(100 + Math.random() * 900);
     setActiveRoomCode(code);
     setIsHost(true);
@@ -651,10 +695,21 @@ export default function App() {
       joinedAt: Date.now(),
     };
 
+    // Immediately seed connectedRoomPlayers with host presence so it never shows 0 players
+    setConnectedRoomPlayers([userPresence]);
+
     const channel = joinRoomChannel(code, userPresence, {
       onEvent: handleRemoteRoomEvent,
       onPresenceSync: (presences) => {
-        setConnectedRoomPlayers(presences);
+        setConnectedRoomPlayers((prev) => {
+          const map = new Map<string, RoomPresenceState>();
+          prev.forEach((p) => map.set(p.userId, p));
+          presences.forEach((p) => map.set(p.userId, p));
+          if (!map.has(userPresence.userId)) {
+            map.set(userPresence.userId, userPresence);
+          }
+          return Array.from(map.values());
+        });
       },
     });
 
@@ -663,6 +718,11 @@ export default function App() {
 
   // Join Online Room (Client)
   const handleJoinRoom = (code: string) => {
+    if (roomChannelRef.current) {
+      leaveRoomChannel(roomChannelRef.current).catch(() => {});
+      roomChannelRef.current = null;
+    }
+
     const formattedCode = code.trim().toUpperCase();
     setActiveRoomCode(formattedCode);
     setIsHost(false);
@@ -677,10 +737,21 @@ export default function App() {
       joinedAt: Date.now(),
     };
 
+    // Immediately seed connectedRoomPlayers with user presence
+    setConnectedRoomPlayers([userPresence]);
+
     const channel = joinRoomChannel(formattedCode, userPresence, {
       onEvent: handleRemoteRoomEvent,
       onPresenceSync: (presences) => {
-        setConnectedRoomPlayers(presences);
+        setConnectedRoomPlayers((prev) => {
+          const map = new Map<string, RoomPresenceState>();
+          prev.forEach((p) => map.set(p.userId, p));
+          presences.forEach((p) => map.set(p.userId, p));
+          if (!map.has(userPresence.userId)) {
+            map.set(userPresence.userId, userPresence);
+          }
+          return Array.from(map.values());
+        });
         const myIndex = presences.findIndex((p) => p.userId === profile.id);
         if (myIndex !== -1) {
           setMyOnlinePlayerIndex(myIndex);
