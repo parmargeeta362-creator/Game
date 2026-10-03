@@ -18,15 +18,15 @@ export const Goti: React.FC<GotiProps> = ({ player, isActive, size = 32 }) => {
 
   return (
     <div
-      className={`relative inline-flex flex-col items-center justify-center pointer-events-none select-none transition-transform duration-200 ${
-        isActive ? '-translate-y-1.5 animate-bounce' : ''
+      className={`relative inline-flex flex-col items-center justify-center pointer-events-none select-none transition-all duration-300 ${
+        isActive ? 'filter drop-shadow-[0_0_10px_rgba(251,191,36,0.85)]' : ''
       }`}
       style={{ width: size, height: height }}
     >
       {/* Dynamic Ground Shadow */}
       <div
         className={`absolute bottom-0 w-[85%] h-[6px] rounded-full bg-black/60 blur-[1.5px] transition-all duration-300 ${
-          isActive ? 'scale-75 opacity-40' : 'scale-100 opacity-70'
+          isActive ? 'scale-90 opacity-60' : 'scale-100 opacity-70'
         }`}
       />
 

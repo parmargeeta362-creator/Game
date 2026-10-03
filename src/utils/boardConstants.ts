@@ -9,7 +9,7 @@ export const DEFAULT_LADDERS: Ladder[] = [
   { id: 'ladder-40-59', bottom: 40, top: 59, color: '#38bdf8' },
   { id: 'ladder-51-67', bottom: 51, top: 67, color: '#0ea5e9' },
   { id: 'ladder-63-81', bottom: 63, top: 81, color: '#38bdf8' },
-  { id: 'ladder-71-91', bottom: 71, top: 91, color: '#60a5fa' },
+  { id: 'ladder-71-92', bottom: 71, top: 92, color: '#38bdf8' },
 ];
 
 // 8 Balanced Snakes
@@ -186,7 +186,7 @@ export function generateSnakePath(headTile: number, tailTile: number): {
 /**
  * Calculates ladder geometry (left rail, right rail, rungs) in percentage coordinates
  */
-export function generateLadderGeometry(bottomTile: number, topTile: number, width: number = 3.2): {
+export function generateLadderGeometry(bottomTile: number, topTile: number, width: number = 3.4): {
   leftRail: { x1: number; y1: number; x2: number; y2: number };
   rightRail: { x1: number; y1: number; x2: number; y2: number };
   rungs: { x1: number; y1: number; x2: number; y2: number }[];
@@ -198,8 +198,28 @@ export function generateLadderGeometry(bottomTile: number, topTile: number, widt
   const b = getTileCenterPercent(bottomTile);
   const t = getTileCenterPercent(topTile);
 
-  const dx = t.cx - b.cx;
-  const dy = t.cy - b.cy;
+  let startX = b.cx;
+  let startY = b.cy;
+  let endX = t.cx;
+  let endY = t.cy;
+
+  // If a ladder is completely vertical (same column, e.g. dx === 0),
+  // give it a natural realistic tilt so it never looks like a stiff vertical bar
+  if (Math.abs(endX - startX) < 1.0) {
+    if (startX > 70) {
+      startX -= 2.2;
+      endX += 0.8;
+    } else if (startX < 30) {
+      startX += 2.2;
+      endX -= 0.8;
+    } else {
+      startX -= 1.8;
+      endX += 1.8;
+    }
+  }
+
+  const dx = endX - startX;
+  const dy = endY - startY;
   const dist = Math.sqrt(dx * dx + dy * dy);
   const angleRad = Math.atan2(dy, dx);
 
@@ -208,21 +228,21 @@ export function generateLadderGeometry(bottomTile: number, topTile: number, widt
   const py = Math.cos(angleRad) * (width / 2);
 
   const leftRail = {
-    x1: b.cx - px,
-    y1: b.cy - py,
-    x2: t.cx - px,
-    y2: t.cy - py,
+    x1: startX - px,
+    y1: startY - py,
+    x2: endX - px,
+    y2: endY - py,
   };
 
   const rightRail = {
-    x1: b.cx + px,
-    y1: b.cy + py,
-    x2: t.cx + px,
-    y2: t.cy + py,
+    x1: startX + px,
+    y1: startY + py,
+    x2: endX + px,
+    y2: endY + py,
   };
 
-  // Generate rungs every ~5-6 units
-  const rungCount = Math.max(3, Math.round(dist / 5.5));
+  // Generate rungs every ~5.0 units for realistic ladder density
+  const rungCount = Math.max(3, Math.round(dist / 5.0));
   const rungs: { x1: number; y1: number; x2: number; y2: number }[] = [];
 
   for (let i = 1; i < rungCount; i++) {
@@ -238,9 +258,9 @@ export function generateLadderGeometry(bottomTile: number, topTile: number, widt
     leftRail,
     rightRail,
     rungs,
-    bottomX: b.cx,
-    bottomY: b.cy,
-    topX: t.cx,
-    topY: t.cy,
+    bottomX: startX,
+    bottomY: startY,
+    topX: endX,
+    topY: endY,
   };
 }
