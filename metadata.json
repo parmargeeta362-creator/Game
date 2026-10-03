@@ -1,0 +1,6 @@
+{
+  "name": "Snakes & Ladders Classic",
+  "description": "Interactive 2-4 player Snake and Ladder board game with 3D tactile dice rolling, animated pawn traversal, smart bots, and audio effects.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
