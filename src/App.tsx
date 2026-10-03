@@ -311,161 +311,138 @@ export default function App() {
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  // Traversal execution logic (used locally and on online broadcast)
-  const executeRollAndMove = useCallback(
-    async (roll: number, forcedPlayerIndex?: number) => {
-      if (isRolling || isMoving || winner || isExecutingTurn.current) return;
-
+  // Authoritative turn and pawn execution engine (used locally and on online broadcast)
+  const executeAuthoritativeMove = useCallback(
+    async (payload: {
+      roll: number;
+      playerIndex: number;
+      playerId: string;
+      startPos: number;
+      steps: number[];
+      isBouncing: boolean;
+      finalPos: number;
+      ladderClimbed?: { bottom: number; top: number };
+      snakeBitten?: { head: number; tail: number };
+      nextPlayerIndex: number;
+      allPositions: { [id: string]: number };
+      isWon: boolean;
+    }) => {
       isExecutingTurn.current = true;
       setIsRolling(true);
       soundEffects.playDiceRoll();
 
-      // Dice tumble delay
-      await sleep(550);
-      setDiceValue(roll);
+      // 1. Dice roll tumble animation
+      await sleep(500);
+      setDiceValue(payload.roll);
       setIsRolling(false);
       setIsMoving(true);
 
-      const targetIdx = forcedPlayerIndex !== undefined ? forcedPlayerIndex : activePlayerIndex;
-      const player = activePlayers[targetIdx] || activePlayers[0];
-      const startPos = player.position;
+      const movingPlayer = activePlayers[payload.playerIndex] || activePlayers.find(p => p.id === payload.playerId) || activePlayers[0];
 
+      // Track statistics
       setPlayers((prev) =>
         prev.map((p) =>
-          p.id === player.id
+          p.id === payload.playerId
             ? {
                 ...p,
                 rollsCount: p.rollsCount + 1,
-                sixesRolled: roll === 6 ? p.sixesRolled + 1 : p.sixesRolled,
+                sixesRolled: payload.roll === 6 ? p.sixesRolled + 1 : p.sixesRolled,
               }
             : p
         )
       );
 
-      // Traversal calculation
-      let steps: number[] = [];
-      let isBouncing = false;
-
-      if (settings.winCondition === 'reach_or_pass') {
-        const target = Math.min(100, startPos + roll);
-        for (let pos = startPos + 1; pos <= target; pos++) {
-          steps.push(pos);
-        }
-      } else if (settings.winCondition === 'exact_stay') {
-        if (startPos + roll <= 100) {
-          for (let pos = startPos + 1; pos <= startPos + roll; pos++) {
-            steps.push(pos);
-          }
-        } else {
-          steps = [];
-          setLastEventText(
-            `${player.name} rolled ${roll} - requires exact roll to hit 100. Held at ${startPos}.`
-          );
-        }
-      } else {
-        // exact_bounce
-        if (startPos + roll <= 100) {
-          for (let pos = startPos + 1; pos <= startPos + roll; pos++) {
-            steps.push(pos);
-          }
-        } else {
-          isBouncing = true;
-          const to100 = 100 - startPos;
-          const bounceBack = roll - to100;
-          for (let pos = startPos + 1; pos <= 100; pos++) {
-            steps.push(pos);
-          }
-          for (let pos = 99; pos >= 100 - bounceBack; pos--) {
-            steps.push(pos);
-          }
-        }
-      }
-
-      // Step-by-step pawn traversal
-      let currentStepPos = startPos;
-      for (let i = 0; i < steps.length; i++) {
-        currentStepPos = steps[i];
+      // 2. Step-by-step tile progression
+      let currentPos = payload.startPos;
+      for (let i = 0; i < payload.steps.length; i++) {
+        currentPos = payload.steps[i];
         setPlayers((prev) =>
           prev.map((p) =>
-            p.id === player.id ? { ...p, position: currentStepPos } : p
+            p.id === payload.playerId ? { ...p, position: currentPos } : p
           )
         );
         soundEffects.playPawnStep();
         await sleep(settings.moveSpeedMs);
       }
 
-      if (steps.length > 0) {
-        if (isBouncing) {
+      if (payload.steps.length > 0) {
+        if (payload.isBouncing) {
           soundEffects.playBounce();
           setLastEventText(
-            `↩️ ${player.name} rolled ${roll}, reached 100 and bounced back to Tile ${currentStepPos}!`
+            `↩️ ${movingPlayer.name} rolled ${payload.roll}, reached 100 and bounced back to Tile ${currentPos}!`
           );
         } else {
-          setLastEventText(`${player.name} rolled ${roll}, advanced to Tile ${currentStepPos}.`);
+          setLastEventText(`${movingPlayer.name} rolled ${payload.roll}, advanced to Tile ${currentPos}.`);
         }
       }
 
-      // Check Ladder or Snake
-      let finalPos = currentStepPos;
-      if (finalPos < 100) {
-        const ladder = ladders.find((l) => l.bottom === finalPos);
-        const snake = snakes.find((s) => s.head === finalPos);
+      // 3. Ladder climbing animation
+      if (payload.ladderClimbed) {
+        setHighlightTile(payload.ladderClimbed.top);
+        await sleep(350);
+        soundEffects.playLadderClimb();
 
-        if (ladder) {
-          setHighlightTile(ladder.top);
-          await sleep(350);
-          soundEffects.playLadderClimb();
+        setPlayers((prev) =>
+          prev.map((p) =>
+            p.id === payload.playerId
+              ? {
+                  ...p,
+                  position: payload.ladderClimbed!.top,
+                  laddersClimbed: p.laddersClimbed + 1,
+                }
+              : p
+          )
+        );
 
-          finalPos = ladder.top;
-          setPlayers((prev) =>
-            prev.map((p) =>
-              p.id === player.id
-                ? {
-                    ...p,
-                    position: finalPos,
-                    laddersClimbed: p.laddersClimbed + 1,
-                  }
-                : p
-            )
-          );
+        setLastEventText(
+          `🪜 Climbed ladder from Tile ${payload.ladderClimbed.bottom} up to Tile ${payload.ladderClimbed.top}!`
+        );
+        await sleep(400);
+        setHighlightTile(null);
+      } else if (payload.snakeBitten) {
+        // Snake slide animation
+        setHighlightTile(payload.snakeBitten.tail);
+        await sleep(350);
+        soundEffects.playSnakeSlide();
 
-          setLastEventText(`🪜 Climbed ladder from Tile ${ladder.bottom} up to Tile ${ladder.top}!`);
-          await sleep(400);
-          setHighlightTile(null);
-        } else if (snake) {
-          setHighlightTile(snake.tail);
-          await sleep(350);
-          soundEffects.playSnakeSlide();
+        setPlayers((prev) =>
+          prev.map((p) =>
+            p.id === payload.playerId
+              ? {
+                  ...p,
+                  position: payload.snakeBitten!.tail,
+                  snakesBitten: p.snakesBitten + 1,
+                }
+              : p
+          )
+        );
 
-          finalPos = snake.tail;
-          setPlayers((prev) =>
-            prev.map((p) =>
-              p.id === player.id
-                ? {
-                    ...p,
-                    position: finalPos,
-                    snakesBitten: p.snakesBitten + 1,
-                  }
-                : p
-            )
-          );
-
-          setLastEventText(`🐍 Bitten by snake at Tile ${snake.head}! Slid to Tile ${snake.tail}!`);
-          await sleep(400);
-          setHighlightTile(null);
-        }
+        setLastEventText(
+          `🐍 Bitten by snake at Tile ${payload.snakeBitten.head}! Slid to Tile ${payload.snakeBitten.tail}!`
+        );
+        await sleep(400);
+        setHighlightTile(null);
       }
 
-      // Check Victory
-      if (finalPos === 100) {
-        const winningPlayer = { ...player, position: 100 };
+      // 4. Authoritative position lock: Sync every player's tile exactly
+      if (payload.allPositions) {
+        setPlayers((prev) =>
+          prev.map((p) => {
+            const authoritativePos = payload.allPositions[p.id];
+            return authoritativePos !== undefined ? { ...p, position: authoritativePos } : p;
+          })
+        );
+      }
+
+      // 5. Victory check
+      if (payload.isWon) {
+        const winningPlayer = { ...movingPlayer, position: 100 };
         setWinner(winningPlayer);
         setIsVictoryOpen(true);
         soundEffects.playWinFanfare();
-        setLastEventText(`🏆 ${player.name} reached Tile 100 and won!`);
+        setLastEventText(`🏆 ${movingPlayer.name} reached Tile 100 and won!`);
 
-        // Update profile stats if player 1
-        if (player.id === activePlayers[0].id) {
+        if (movingPlayer.id === activePlayers[0]?.id) {
           setProfile((prev) => {
             const updated = {
               ...prev,
@@ -487,28 +464,19 @@ export default function App() {
         return;
       }
 
-      // Turn transition or lucky 6
-      if (roll === 6 && settings.extraRollOnSix) {
+      // 6. Turn advance or bonus roll on 6
+      if (payload.roll === 6 && settings.extraRollOnSix) {
         soundEffects.playSixChime();
-        setLastEventText(`✨ Rolled a 6! ${player.name} gets an extra roll!`);
+        setLastEventText(`✨ Rolled a 6! ${movingPlayer.name} gets an extra roll!`);
       } else {
-        setActivePlayerIndex((prev) => (prev + 1) % activePlayers.length);
+        setActivePlayerIndex(payload.nextPlayerIndex);
         setTurnCount((prev) => prev + 1);
       }
 
       setIsMoving(false);
       isExecutingTurn.current = false;
     },
-    [
-      isRolling,
-      isMoving,
-      winner,
-      activePlayers,
-      activePlayerIndex,
-      settings,
-      ladders,
-      snakes,
-    ]
+    [activePlayers, settings]
   );
 
   // Local or Online dice roll trigger
@@ -517,28 +485,147 @@ export default function App() {
     if (isOnlineMatchActive && !isMyTurn) return;
 
     const roll = Math.floor(Math.random() * 6) + 1;
+    const player = activePlayers[activePlayerIndex] || activePlayers[0];
+    const startPos = player.position;
 
-    // If online match active, broadcast roll event to peers
+    // Calculate traversal steps
+    let steps: number[] = [];
+    let isBouncing = false;
+
+    if (settings.winCondition === 'reach_or_pass') {
+      const target = Math.min(100, startPos + roll);
+      for (let pos = startPos + 1; pos <= target; pos++) steps.push(pos);
+    } else if (settings.winCondition === 'exact_stay') {
+      if (startPos + roll <= 100) {
+        for (let pos = startPos + 1; pos <= startPos + roll; pos++) steps.push(pos);
+      } else {
+        steps = [];
+        setLastEventText(
+          `${player.name} rolled ${roll} - requires exact roll to hit 100. Held at ${startPos}.`
+        );
+      }
+    } else {
+      // exact_bounce
+      if (startPos + roll <= 100) {
+        for (let pos = startPos + 1; pos <= startPos + roll; pos++) steps.push(pos);
+      } else {
+        isBouncing = true;
+        const to100 = 100 - startPos;
+        const bounceBack = roll - to100;
+        for (let pos = startPos + 1; pos <= 100; pos++) steps.push(pos);
+        for (let pos = 99; pos >= 100 - bounceBack; pos--) steps.push(pos);
+      }
+    }
+
+    const stepEndPos = steps.length > 0 ? steps[steps.length - 1] : startPos;
+    let finalPos = stepEndPos;
+    let ladderClimbed: { bottom: number; top: number } | undefined;
+    let snakeBitten: { head: number; tail: number } | undefined;
+
+    if (finalPos < 100) {
+      const ladder = ladders.find((l) => l.bottom === finalPos);
+      const snake = snakes.find((s) => s.head === finalPos);
+      if (ladder) {
+        finalPos = ladder.top;
+        ladderClimbed = { bottom: ladder.bottom, top: ladder.top };
+      } else if (snake) {
+        finalPos = snake.tail;
+        snakeBitten = { head: snake.head, tail: snake.tail };
+      }
+    }
+
+    const isWon = finalPos === 100;
+    const extraRoll = roll === 6 && settings.extraRollOnSix;
+    const nextPlayerIndex = (extraRoll || isWon)
+      ? activePlayerIndex
+      : (activePlayerIndex + 1) % activePlayers.length;
+
+    // Authoritative positions map
+    const allPositions: { [id: string]: number } = {};
+    activePlayers.forEach((p, idx) => {
+      allPositions[p.id] = idx === activePlayerIndex ? finalPos : p.position;
+    });
+
+    const movePayload = {
+      roll,
+      playerIndex: activePlayerIndex,
+      playerId: player.id,
+      startPos,
+      steps,
+      isBouncing,
+      finalPos,
+      ladderClimbed,
+      snakeBitten,
+      nextPlayerIndex,
+      allPositions,
+      isWon,
+    };
+
+    // If online match active, broadcast move payload to peers
     if (isOnlineMatchActive && roomChannelRef.current) {
       broadcastRoomEvent(
         roomChannelRef.current,
         'ROLL_DICE',
-        { roll, playerIndex: activePlayerIndex },
+        movePayload,
         mySessionUserId
       ).catch(() => {});
     }
 
-    await executeRollAndMove(roll);
+    await executeAuthoritativeMove(movePayload);
   }, [
     isRolling,
     isMoving,
     winner,
     isOnlineMatchActive,
     isMyTurn,
+    activePlayers,
     activePlayerIndex,
-    executeRollAndMove,
+    settings,
+    ladders,
+    snakes,
     mySessionUserId,
+    executeAuthoritativeMove,
   ]);
+
+  // Set up online match with human players at starting position
+  const setupOnlineGameSession = useCallback(
+    (onlinePlayersList: { userId: string; name: string; avatar: string; frame?: string; title?: string }[]) => {
+      const initializedPlayers: Player[] = onlinePlayersList.map((op, idx) => {
+        const base = DEFAULT_PLAYERS[idx] || DEFAULT_PLAYERS[0];
+        return {
+          ...base,
+          id: op.userId,
+          name: op.name,
+          photoUrl: op.avatar || undefined,
+          frame: op.frame || 'gold',
+          title: op.title || 'Snake Charmer',
+          type: 'human' as const, // 100% human! Never bot!
+          onlineUserId: op.userId,
+          position: 1,
+          laddersClimbed: 0,
+          snakesBitten: 0,
+          rollsCount: 0,
+          sixesRolled: 0,
+        };
+      });
+
+      setSettings((prev) => ({ ...prev, playerCount: initializedPlayers.length }));
+      setPlayers(initializedPlayers);
+      setActivePlayerIndex(0);
+      setDiceValue(1);
+      setIsRolling(false);
+      setIsMoving(false);
+      setHighlightTile(null);
+      setWinner(null);
+      setIsVictoryOpen(false);
+      setTurnCount(1);
+      isExecutingTurn.current = false;
+      setIsOnlineMatchActive(true);
+      setIsOnlineRoomOpen(false);
+      setLastEventText('🌐 Online Match Launched! Host has first turn.');
+    },
+    []
+  );
 
   // Remote Realtime Event Listener
   const handleRemoteRoomEvent = useCallback(
@@ -585,30 +672,15 @@ export default function App() {
           });
         }
       } else if (event.type === 'ROLL_DICE') {
-        const { roll, playerIndex } = event.payload;
-        executeRollAndMove(roll, playerIndex);
+        const payload = event.payload;
+        if (payload) {
+          executeAuthoritativeMove(payload);
+        }
       } else if (event.type === 'GAME_START') {
         const { onlinePlayers } = event.payload;
         if (Array.isArray(onlinePlayers)) {
-          setSettings((prev) => ({ ...prev, playerCount: onlinePlayers.length }));
-          setPlayers((prev) =>
-            onlinePlayers.map((op, idx) => ({
-              ...(prev[idx] || DEFAULT_PLAYERS[idx]),
-              id: op.userId,
-              name: op.name,
-              photoUrl: op.avatar,
-              frame: op.frame || 'gold',
-              title: op.title || 'Snake Charmer',
-              type: 'human',
-              onlineUserId: op.userId,
-              position: 1,
-            }))
-          );
+          setupOnlineGameSession(onlinePlayers);
         }
-        setIsOnlineMatchActive(true);
-        setIsOnlineRoomOpen(false);
-        handleRestart();
-        setLastEventText('🌐 Online Match Started! Host rolls first.');
       } else if (event.type === 'EMOJI_REACTION') {
         const emoji = event.payload.emoji;
         setFloatingEmoji({ emoji, id: Date.now() });
@@ -630,7 +702,7 @@ export default function App() {
         setUnreadChatCount((prev) => prev + 1);
       }
     },
-    [profile, isHost, mySessionUserId, executeRollAndMove, handleRestart]
+    [profile, isHost, mySessionUserId, executeAuthoritativeMove, setupOnlineGameSession]
   );
 
   // Send text chat message in online room
@@ -771,7 +843,7 @@ export default function App() {
     if (!isHost || !roomChannelRef.current || connectedRoomPlayers.length < 2) return;
 
     // Convert room presences to active game players
-    const onlinePlayersList = connectedRoomPlayers.map((p, idx) => ({
+    const onlinePlayersList = connectedRoomPlayers.map((p) => ({
       userId: p.userId,
       name: p.name,
       avatar: p.avatar,
@@ -787,25 +859,7 @@ export default function App() {
       mySessionUserId
     ).catch(() => {});
 
-    setSettings((prev) => ({ ...prev, playerCount: onlinePlayersList.length }));
-    setPlayers((prev) =>
-      onlinePlayersList.map((op, idx) => ({
-        ...(prev[idx] || DEFAULT_PLAYERS[idx]),
-        id: op.userId,
-        name: op.name,
-        photoUrl: op.avatar,
-        frame: op.frame || 'gold',
-        title: op.title || 'Snake Charmer',
-        type: 'human',
-        onlineUserId: op.userId,
-        position: 1,
-      }))
-    );
-
-    setIsOnlineMatchActive(true);
-    setIsOnlineRoomOpen(false);
-    handleRestart();
-    setLastEventText('🌐 Online Match Launched! Host has first turn.');
+    setupOnlineGameSession(onlinePlayersList);
   };
 
   // Leave room
