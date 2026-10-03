@@ -41,3 +41,61 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.35);
 }
+
+/* Victory Particle Explosions & Celebratory Keyframes */
+@keyframes particle-burst {
+  0% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(var(--burst-x, 0px), var(--burst-y, 0px)) scale(var(--burst-s, 0.3)) rotate(var(--burst-r, 360deg));
+    opacity: 0;
+  }
+}
+
+@keyframes shockwave-expand {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.6);
+    opacity: 0;
+  }
+}
+
+@keyframes victory-spin-slow {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes spark-float {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-8px) scale(1.3);
+    opacity: 1;
+  }
+}
+
+.animate-shockwave {
+  animation: shockwave-expand 2s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
+}
+
+.animate-sunburst {
+  animation: victory-spin-slow 24s linear infinite;
+}
+
+.animate-spark {
+  animation: spark-float 2s ease-in-out infinite;
+}

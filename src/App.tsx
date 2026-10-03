@@ -29,6 +29,7 @@ import {
   broadcastRoomEvent,
   leaveRoomChannel,
   RoomPresenceState,
+  normalizeRoomCode,
 } from './utils/supabaseRealtime';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
@@ -148,6 +149,8 @@ export default function App() {
 
   const roomChannelRef = useRef<RealtimeChannel | null>(null);
   const isExecutingTurn = useRef(false);
+  const clientSessionId = useRef('c_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36)).current;
+  const mySessionUserId = `${profile.id}_${clientSessionId}`;
 
   // Sync sound settings
   useEffect(() => {
@@ -252,6 +255,7 @@ export default function App() {
   const isMyTurn =
     !isOnlineMatchActive ||
     activePlayerIndex === myOnlinePlayerIndex ||
+    currentPlayer.onlineUserId === mySessionUserId ||
     currentPlayer.onlineUserId === profile.id;
 
   // Profile update handler (saves locally and to Supabase)
@@ -520,7 +524,7 @@ export default function App() {
         roomChannelRef.current,
         'ROLL_DICE',
         { roll, playerIndex: activePlayerIndex },
-        profile.id
+        mySessionUserId
       ).catch(() => {});
     }
 
@@ -533,13 +537,13 @@ export default function App() {
     isMyTurn,
     activePlayerIndex,
     executeRollAndMove,
-    profile.id,
+    mySessionUserId,
   ]);
 
   // Remote Realtime Event Listener
   const handleRemoteRoomEvent = useCallback(
     (event: RoomBroadcastEvent) => {
-      if (event.senderId === profile.id) return; // ignore self-broadcast
+      if (event.senderId === mySessionUserId) return; // ignore self-broadcast
 
       if (event.type === 'PLAYER_JOINED') {
         const joinedPlayer = event.payload as RoomPresenceState;
@@ -554,7 +558,7 @@ export default function App() {
           // Handshake: Reply with my presence so the new peer immediately receives it
           if (roomChannelRef.current) {
             const myPresence: RoomPresenceState = {
-              userId: profile.id,
+              userId: mySessionUserId,
               name: profile.name,
               avatar: profile.photoUrl,
               frame: profile.frame,
@@ -566,7 +570,7 @@ export default function App() {
               roomChannelRef.current,
               'SYNC_STATE',
               { presence: myPresence },
-              profile.id
+              mySessionUserId
             ).catch(() => {});
           }
         }
@@ -626,7 +630,7 @@ export default function App() {
         setUnreadChatCount((prev) => prev + 1);
       }
     },
-    [profile, isHost, executeRollAndMove, handleRestart]
+    [profile, isHost, mySessionUserId, executeRollAndMove, handleRestart]
   );
 
   // Send text chat message in online room
@@ -651,11 +655,11 @@ export default function App() {
           roomChannelRef.current,
           'CHAT_MESSAGE',
           newMsg,
-          profile.id
+          mySessionUserId
         ).catch(() => {});
       }
     },
-    [profile]
+    [profile, mySessionUserId]
   );
 
   // Send interactive emoji reaction in online room
@@ -668,7 +672,7 @@ export default function App() {
         roomChannelRef.current,
         'EMOJI_REACTION',
         { emoji },
-        profile.id
+        mySessionUserId
       ).catch(() => {});
     }
   };
@@ -680,13 +684,13 @@ export default function App() {
       roomChannelRef.current = null;
     }
 
-    const code = 'SNAKE-' + Math.floor(100 + Math.random() * 900);
+    const code = normalizeRoomCode('SNAKE-' + Math.floor(100 + Math.random() * 900));
     setActiveRoomCode(code);
     setIsHost(true);
     setMyOnlinePlayerIndex(0);
 
     const userPresence: RoomPresenceState = {
-      userId: profile.id,
+      userId: mySessionUserId,
       name: profile.name,
       avatar: profile.photoUrl,
       frame: profile.frame,
@@ -723,12 +727,12 @@ export default function App() {
       roomChannelRef.current = null;
     }
 
-    const formattedCode = code.trim().toUpperCase();
+    const formattedCode = normalizeRoomCode(code);
     setActiveRoomCode(formattedCode);
     setIsHost(false);
 
     const userPresence: RoomPresenceState = {
-      userId: profile.id,
+      userId: mySessionUserId,
       name: profile.name,
       avatar: profile.photoUrl,
       frame: profile.frame,
@@ -752,7 +756,7 @@ export default function App() {
           }
           return Array.from(map.values());
         });
-        const myIndex = presences.findIndex((p) => p.userId === profile.id);
+        const myIndex = presences.findIndex((p) => p.userId === mySessionUserId);
         if (myIndex !== -1) {
           setMyOnlinePlayerIndex(myIndex);
         }
@@ -780,7 +784,7 @@ export default function App() {
       roomChannelRef.current,
       'GAME_START',
       { onlinePlayers: onlinePlayersList },
-      profile.id
+      mySessionUserId
     ).catch(() => {});
 
     setSettings((prev) => ({ ...prev, playerCount: onlinePlayersList.length }));

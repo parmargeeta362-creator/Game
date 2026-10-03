@@ -13,10 +13,32 @@ export interface RoomPresenceState {
 }
 
 /**
+ * Normalizes any user-entered room code:
+ * - "452" -> "SNAKE-452"
+ * - "snake 452" -> "SNAKE-452"
+ * - "snake-452" -> "SNAKE-452"
+ * - "SNAKE452" -> "SNAKE-452"
+ */
+export function normalizeRoomCode(code: string): string {
+  if (!code) return '';
+  const cleaned = code.trim().toUpperCase().replace(/\s+/g, '');
+  if (/^\d{3,4}$/.test(cleaned)) {
+    return `SNAKE-${cleaned}`;
+  }
+  if (/^SNAKE\d{3,4}$/.test(cleaned)) {
+    return `SNAKE-${cleaned.replace('SNAKE', '')}`;
+  }
+  if (!cleaned.startsWith('SNAKE-') && /^\w+-\d+$/.test(cleaned)) {
+    return cleaned;
+  }
+  return cleaned;
+}
+
+/**
  * Join or create a Supabase Realtime Channel for a game room
  */
 export function joinRoomChannel(
-  roomCode: string,
+  rawRoomCode: string,
   userPresence: RoomPresenceState,
   callbacks: {
     onEvent: (event: RoomBroadcastEvent) => void;
@@ -24,7 +46,8 @@ export function joinRoomChannel(
     onStatusChange?: (status: string) => void;
   }
 ): RealtimeChannel {
-  const channelName = `snake-room-${roomCode.trim().toUpperCase()}`;
+  const roomCode = normalizeRoomCode(rawRoomCode);
+  const channelName = `snake-room-${roomCode}`;
 
   // Clean up existing registered channel with this topic if any
   try {
@@ -102,10 +125,16 @@ export function joinRoomChannel(
         console.warn('Presence track error:', err);
       }
 
-      // Broadcast join event directly to notify any connected peers immediately
-      try {
-        await broadcastRoomEvent(channel, 'PLAYER_JOINED', userPresence, userPresence.userId);
-      } catch {}
+      // Broadcast join event in multi-waves to guarantee instant peer discovery
+      const sendJoin = async () => {
+        try {
+          await broadcastRoomEvent(channel, 'PLAYER_JOINED', userPresence, userPresence.userId);
+        } catch {}
+      };
+
+      await sendJoin();
+      setTimeout(sendJoin, 300);
+      setTimeout(sendJoin, 900);
     }
   });
 

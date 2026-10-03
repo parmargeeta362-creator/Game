@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   X,
   Users,
@@ -13,7 +13,7 @@ import {
   MessageCircle,
 } from 'lucide-react';
 import { UserProfile, ChatMessage } from '../types/game';
-import { RoomPresenceState } from '../utils/supabaseRealtime';
+import { RoomPresenceState, normalizeRoomCode } from '../utils/supabaseRealtime';
 import { OnlineChatBox } from './OnlineChatBox';
 
 interface OnlineRoomModalProps {
@@ -379,27 +379,32 @@ export const OnlineRoomModal: React.FC<OnlineRoomModalProps> = ({
               <div className="space-y-3.5">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider opacity-75 mb-1.5">
-                    Enter 6-Digit Room Code
+                    Enter Room Code or 3-Digit Number
                   </label>
                   <input
                     type="text"
                     value={inputCode}
                     onChange={(e) => setInputCode(e.target.value.toUpperCase().slice(0, 10))}
-                    placeholder="e.g. SNAKE-742"
+                    placeholder="e.g. 452 or SNAKE-452"
                     className={`w-full rounded-xl px-4 py-2.5 text-base font-mono font-bold tracking-widest text-center border focus:outline-none focus:ring-2 focus:ring-amber-400 uppercase ${
                       isDark
                         ? 'bg-stone-800 border-stone-700 text-amber-400'
                         : 'bg-white border-stone-300 text-amber-600'
                     }`}
                   />
+                  {inputCode.trim().length >= 2 && (
+                    <div className="mt-1.5 text-center text-xs font-mono text-amber-400 font-bold">
+                      ➔ Joining Room: <span className="underline">{normalizeRoomCode(inputCode)}</span>
+                    </div>
+                  )}
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => onJoinRoom(inputCode)}
-                  disabled={inputCode.trim().length < 4}
+                  onClick={() => onJoinRoom(normalizeRoomCode(inputCode))}
+                  disabled={inputCode.trim().length < 3}
                   className={`w-full py-3 px-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all shadow-lg ${
-                    inputCode.trim().length < 4
+                    inputCode.trim().length < 3
                       ? 'bg-stone-800 text-stone-500 cursor-not-allowed border border-stone-700/50'
                       : 'bg-amber-500 hover:bg-amber-400 text-stone-950 cursor-pointer hover:scale-[1.01]'
                   }`}
