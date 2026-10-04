@@ -12,6 +12,7 @@ import {
   UserProfile,
   RoomBroadcastEvent,
   ChatMessage,
+  MatchRecord,
 } from './types/game';
 import { soundEffects } from './utils/audio';
 import { Board } from './components/Board';
@@ -36,8 +37,14 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 const QUICK_EMOJIS = ['🎲', '🐍', '🪜', '🔥', '🎉', '😂'];
 
 export default function App() {
-  // Game Settings: theme (light, dark, system), sound, rules
+  // Game Settings: theme (light, dark, system), sound, rules, board, dice & goti styles
   const [settings, setSettings] = useState<GameSettings>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('snakes_ladders_game_settings');
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
     return {
       playerCount: 2,
       extraRollOnSix: true,
@@ -45,15 +52,38 @@ export default function App() {
       moveSpeedMs: 170,
       soundEnabled: true,
       theme: 'system',
+      boardTheme: 'classic_wood',
+      diceStyle: 'classic_ivory',
+      gotiStyle: 'classic_pawn',
     };
   });
 
-  // User Profile with Full Game Customization (Frame, Title, Google, Stats)
+  const handleUpdateSettings = (newSettings: GameSettings) => {
+    setSettings(newSettings);
+    try {
+      localStorage.setItem('snakes_ladders_game_settings', JSON.stringify(newSettings));
+    } catch {}
+  };
+
+  // User Profile with Full Game Customization (Frame, Title, Google, Stats, Match History)
   const [profile, setProfile] = useState<UserProfile>(() => {
+    let savedHistory: MatchRecord[] = [];
+    if (typeof window !== 'undefined') {
+      try {
+        const hist = localStorage.getItem('snakes_ladders_match_history');
+        if (hist) savedHistory = JSON.parse(hist);
+      } catch {}
+    }
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('snakes_ladders_user_profile');
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return {
+            ...parsed,
+            matchHistory: parsed.matchHistory || savedHistory,
+          };
+        }
       } catch {
         // ignore
       }
@@ -69,6 +99,7 @@ export default function App() {
       title: 'Snake Charmer',
       level: 1,
       xp: 0,
+      matchHistory: savedHistory,
     };
   });
 
@@ -151,6 +182,8 @@ export default function App() {
   const isExecutingTurn = useRef(false);
   const clientSessionId = useRef('c_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36)).current;
   const mySessionUserId = `${profile.id}_${clientSessionId}`;
+  const handleRemoteRoomEventRef = useRef<(event: RoomBroadcastEvent) => void>(() => {});
+  const hasRecordedMatch = useRef(false);
 
   // Sync sound settings
   useEffect(() => {
@@ -326,6 +359,8 @@ export default function App() {
       nextPlayerIndex: number;
       allPositions: { [id: string]: number };
       isWon: boolean;
+      winner?: Player;
+      turnsTotal?: number;
     }) => {
       isExecutingTurn.current = true;
       setIsRolling(true);
@@ -436,13 +471,19 @@ export default function App() {
 
       // 5. Victory check
       if (payload.isWon) {
-        const winningPlayer = { ...movingPlayer, position: 100 };
+        const winningPlayer: Player = payload.winner || {
+          ...movingPlayer,
+          position: 100,
+          laddersClimbed: movingPlayer.laddersClimbed + (payload.ladderClimbed ? 1 : 0),
+          snakesBitten: movingPlayer.snakesBitten + (payload.snakeBitten ? 1 : 0),
+        };
         setWinner(winningPlayer);
+        if (payload.turnsTotal) setTurnCount(payload.turnsTotal);
         setIsVictoryOpen(true);
         soundEffects.playWinFanfare();
-        setLastEventText(`🏆 ${movingPlayer.name} reached Tile 100 and won!`);
+        setLastEventText(`🏆 ${winningPlayer.name} reached Tile 100 and won!`);
 
-        if (movingPlayer.id === activePlayers[0]?.id) {
+        if (winningPlayer.id === activePlayers[0]?.id) {
           setProfile((prev) => {
             const updated = {
               ...prev,
@@ -546,6 +587,15 @@ export default function App() {
       allPositions[p.id] = idx === activePlayerIndex ? finalPos : p.position;
     });
 
+    const finalWinner: Player | undefined = isWon
+      ? {
+          ...player,
+          position: 100,
+          laddersClimbed: player.laddersClimbed + (ladderClimbed ? 1 : 0),
+          snakesBitten: player.snakesBitten + (snakeBitten ? 1 : 0),
+        }
+      : undefined;
+
     const movePayload = {
       roll,
       playerIndex: activePlayerIndex,
@@ -559,6 +609,8 @@ export default function App() {
       nextPlayerIndex,
       allPositions,
       isWon,
+      winner: finalWinner,
+      turnsTotal: turnCount,
     };
 
     // If online match active, broadcast move payload to peers
@@ -569,6 +621,15 @@ export default function App() {
         movePayload,
         mySessionUserId
       ).catch(() => {});
+
+      if (isWon && finalWinner) {
+        broadcastRoomEvent(
+          roomChannelRef.current,
+          'GAME_WIN',
+          { winner: finalWinner, turnsTotal: turnCount },
+          mySessionUserId
+        ).catch(() => {});
+      }
     }
 
     await executeAuthoritativeMove(movePayload);
@@ -584,6 +645,7 @@ export default function App() {
     ladders,
     snakes,
     mySessionUserId,
+    turnCount,
     executeAuthoritativeMove,
   ]);
 
@@ -681,6 +743,15 @@ export default function App() {
         if (Array.isArray(onlinePlayers)) {
           setupOnlineGameSession(onlinePlayers);
         }
+      } else if (event.type === 'GAME_WIN') {
+        const { winner: winPlayer, turnsTotal: totalTurns } = event.payload;
+        if (winPlayer) {
+          setWinner(winPlayer);
+          if (totalTurns) setTurnCount(totalTurns);
+          setIsVictoryOpen(true);
+          soundEffects.playWinFanfare();
+          setLastEventText(`🏆 ${winPlayer.name} reached Tile 100 and won!`);
+        }
       } else if (event.type === 'EMOJI_REACTION') {
         const emoji = event.payload.emoji;
         setFloatingEmoji({ emoji, id: Date.now() });
@@ -704,6 +775,10 @@ export default function App() {
     },
     [profile, isHost, mySessionUserId, executeAuthoritativeMove, setupOnlineGameSession]
   );
+
+  useEffect(() => {
+    handleRemoteRoomEventRef.current = handleRemoteRoomEvent;
+  }, [handleRemoteRoomEvent]);
 
   // Send text chat message in online room
   const handleSendChatMessage = useCallback(
@@ -775,7 +850,7 @@ export default function App() {
     setConnectedRoomPlayers([userPresence]);
 
     const channel = joinRoomChannel(code, userPresence, {
-      onEvent: handleRemoteRoomEvent,
+      onEvent: (event) => handleRemoteRoomEventRef.current(event),
       onPresenceSync: (presences) => {
         setConnectedRoomPlayers((prev) => {
           const map = new Map<string, RoomPresenceState>();
@@ -817,7 +892,7 @@ export default function App() {
     setConnectedRoomPlayers([userPresence]);
 
     const channel = joinRoomChannel(formattedCode, userPresence, {
-      onEvent: handleRemoteRoomEvent,
+      onEvent: (event) => handleRemoteRoomEventRef.current(event),
       onPresenceSync: (presences) => {
         setConnectedRoomPlayers((prev) => {
           const map = new Map<string, RoomPresenceState>();
@@ -1039,6 +1114,8 @@ export default function App() {
             isMoving={isMoving}
             highlightTile={highlightTile}
             isDark={isDark}
+            boardTheme={settings.boardTheme || 'classic_wood'}
+            gotiStyle={settings.gotiStyle || 'classic_pawn'}
           />
         </div>
 
@@ -1054,7 +1131,12 @@ export default function App() {
           >
             {/* Active Turn Header with sculpted Goti */}
             <div className="flex items-center gap-2 w-full mb-1.5 pb-2 border-b border-stone-700/30">
-              <Goti player={currentPlayer} isActive={true} size={22} />
+              <Goti
+                player={currentPlayer}
+                isActive={true}
+                size={22}
+                gotiStyle={settings.gotiStyle || 'classic_pawn'}
+              />
               <div className="min-w-0 flex-1">
                 <span className="text-[9px] uppercase font-extrabold tracking-wider opacity-60 block leading-tight">
                   {isOnlineMatchActive
@@ -1091,6 +1173,7 @@ export default function App() {
                 onRoll={handleRollDice}
                 playerColor={currentPlayer.color}
                 size={62}
+                diceStyle={settings.diceStyle || 'classic_ivory'}
               />
             </div>
 
@@ -1178,7 +1261,12 @@ export default function App() {
                   }`}
                 >
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <Goti player={p} isActive={isActive} size={15} />
+                    <Goti
+                      player={p}
+                      isActive={isActive}
+                      size={15}
+                      gotiStyle={settings.gotiStyle || 'classic_pawn'}
+                    />
                     <span className="text-xs font-bold truncate">
                       {p.name}
                       {isOnlineMatchActive && idx === myOnlinePlayerIndex ? ' (You)' : ''}
@@ -1220,7 +1308,7 @@ export default function App() {
         players={players}
         settings={settings}
         onUpdatePlayers={setPlayers}
-        onUpdateSettings={setSettings}
+        onUpdateSettings={handleUpdateSettings}
         onRestartGame={handleRestart}
         isDark={isDark}
         profile={profile}

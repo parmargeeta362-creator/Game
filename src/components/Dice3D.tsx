@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { DiceStyle } from '../types/game';
 
 interface Dice3DProps {
   value: number; // 1 to 6
@@ -7,6 +8,7 @@ interface Dice3DProps {
   onRoll: () => void;
   size?: number; // size in px, default 62
   playerColor?: string;
+  diceStyle?: DiceStyle;
 }
 
 export const Dice3D: React.FC<Dice3DProps> = ({
@@ -16,6 +18,7 @@ export const Dice3D: React.FC<Dice3DProps> = ({
   onRoll,
   size = 62,
   playerColor = '#ef4444',
+  diceStyle = 'classic_ivory',
 }) => {
   // Accumulated rotations to make consecutive rolls spin continuously rather than snapping back
   const [rotation, setRotation] = useState<{ x: number; y: number; z: number }>({
@@ -72,14 +75,35 @@ export const Dice3D: React.FC<Dice3DProps> = ({
   const renderPips = (num: number) => {
     const pips: React.ReactNode[] = [];
     const pipSize = size < 66 ? 'w-2 h-2' : 'w-2.5 h-2.5';
-    const pipStyle = `${pipSize} rounded-full bg-stone-900 shadow-inner`;
     const aceSize = size < 66 ? 'w-3 h-3' : 'w-3.5 h-3.5';
+
+    let pipStyle = `${pipSize} rounded-full bg-stone-900 shadow-inner`;
+    let acePip = <div className={`${aceSize} rounded-full bg-rose-600 shadow-inner`} />;
+    let faceBg = 'bg-gradient-to-br from-amber-50 via-stone-100 to-amber-100 border-stone-300 shadow-md';
+
+    if (diceStyle === 'golden_metal') {
+      pipStyle = `${pipSize} rounded-full bg-stone-950 shadow-inner ring-1 ring-amber-600/40`;
+      acePip = <div className={`${aceSize} rounded-full bg-red-700 shadow-inner ring-1 ring-amber-400`} />;
+      faceBg = 'bg-gradient-to-br from-amber-300 via-yellow-200 to-amber-500 border-amber-600 shadow-[0_0_12px_rgba(245,158,11,0.5)]';
+    } else if (diceStyle === 'ruby_crystal') {
+      pipStyle = `${pipSize} rounded-full bg-white shadow-[0_0_5px_rgba(255,255,255,0.9)]`;
+      acePip = <div className={`${aceSize} rounded-full bg-amber-200 shadow-[0_0_8px_rgba(254,240,138,1)]`} />;
+      faceBg = 'bg-gradient-to-br from-rose-600 via-red-500 to-rose-900 border-rose-400/80 shadow-[0_0_14px_rgba(244,63,94,0.6)]';
+    } else if (diceStyle === 'midnight_obsidian') {
+      pipStyle = `${pipSize} rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.9)]`;
+      acePip = <div className={`${aceSize} rounded-full bg-fuchsia-400 shadow-[0_0_8px_rgba(232,121,249,1)]`} />;
+      faceBg = 'bg-gradient-to-br from-stone-900 via-stone-950 to-black border-cyan-500/60 shadow-[0_0_12px_rgba(6,182,212,0.4)]';
+    } else if (diceStyle === 'emerald_jade') {
+      pipStyle = `${pipSize} rounded-full bg-amber-300 shadow-[0_0_5px_rgba(252,211,77,0.9)]`;
+      acePip = <div className={`${aceSize} rounded-full bg-amber-100 shadow-[0_0_8px_rgba(254,243,199,1)]`} />;
+      faceBg = 'bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-800 border-emerald-400/80 shadow-[0_0_12px_rgba(16,185,129,0.5)]';
+    }
 
     switch (num) {
       case 1:
         pips.push(
           <div key="c" className="col-start-2 row-start-2 flex items-center justify-center">
-            <div className={`${aceSize} rounded-full bg-rose-600 shadow-inner`} />
+            {acePip}
           </div>
         );
         break;
@@ -136,7 +160,7 @@ export const Dice3D: React.FC<Dice3DProps> = ({
     }
 
     return (
-      <div className="w-full h-full grid grid-cols-3 grid-rows-3 p-1.5 bg-gradient-to-br from-amber-50 via-stone-100 to-amber-100 rounded-lg sm:rounded-xl border border-stone-300 shadow-md">
+      <div className={`w-full h-full grid grid-cols-3 grid-rows-3 p-1.5 rounded-lg sm:rounded-xl border ${faceBg}`}>
         {pips}
       </div>
     );

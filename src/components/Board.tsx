@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Player, Snake, Ladder } from '../types/game';
+import { Player, Snake, Ladder, BoardTheme, GotiStyle } from '../types/game';
 import {
   getTileCoordinates,
   getTileCenterPercent,
@@ -17,6 +17,8 @@ interface BoardProps {
   highlightTile?: number | null;
   onTileClick?: (tile: number) => void;
   isDark?: boolean;
+  boardTheme?: BoardTheme;
+  gotiStyle?: GotiStyle;
 }
 
 export const Board: React.FC<BoardProps> = ({
@@ -28,6 +30,8 @@ export const Board: React.FC<BoardProps> = ({
   highlightTile = null,
   onTileClick,
   isDark = true,
+  boardTheme = 'classic_wood',
+  gotiStyle = 'classic_pawn',
 }) => {
   const [hoveredElement, setHoveredElement] = useState<{
     type: 'snake' | 'ladder';
@@ -74,34 +78,51 @@ export const Board: React.FC<BoardProps> = ({
   const snakeHeads = new Map(snakes.map((s) => [s.head, s.tail]));
   const ladderBottoms = new Map(ladders.map((l) => [l.bottom, l.top]));
 
+  // Outer frame styling based on boardTheme
+  let outerFrameClass = '';
+  let cornerInlayColor = '';
+  let gridSurfaceClass = '';
+
+  if (boardTheme === 'midnight_neon') {
+    outerFrameClass = 'bg-gradient-to-br from-[#030712] via-[#090e1a] to-[#020617] border-2 border-cyan-500/60 shadow-[0_0_40px_rgba(6,182,212,0.25)]';
+    cornerInlayColor = 'border-cyan-400';
+    gridSurfaceClass = 'border-cyan-500/30 bg-[#060a12] shadow-inner';
+  } else if (boardTheme === 'emerald_jungle') {
+    outerFrameClass = 'bg-gradient-to-br from-[#022c22] via-[#064e3b] to-[#022019] border-2 border-emerald-500/60 shadow-[0_0_35px_rgba(16,185,129,0.3)]';
+    cornerInlayColor = 'border-emerald-400';
+    gridSurfaceClass = 'border-emerald-600/30 bg-[#02211b] shadow-inner';
+  } else if (boardTheme === 'golden_palace') {
+    outerFrameClass = 'bg-gradient-to-br from-amber-800 via-amber-600 to-yellow-600 border-2 border-yellow-300 shadow-[0_0_40px_rgba(245,158,11,0.4)]';
+    cornerInlayColor = 'border-yellow-200';
+    gridSurfaceClass = isDark ? 'border-amber-500/40 bg-[#1c1206] shadow-inner' : 'border-amber-400/50 bg-[#fffbeb] shadow-inner';
+  } else if (boardTheme === 'candy_retro') {
+    outerFrameClass = 'bg-gradient-to-br from-[#2e1065] via-[#4c1d95] to-[#3b0764] border-2 border-fuchsia-400/60 shadow-[0_0_35px_rgba(217,70,239,0.3)]';
+    cornerInlayColor = 'border-fuchsia-400';
+    gridSurfaceClass = isDark ? 'border-fuchsia-600/30 bg-[#170a2c] shadow-inner' : 'border-fuchsia-300/50 bg-[#fdf4ff] shadow-inner';
+  } else {
+    // classic_wood
+    outerFrameClass = isDark
+      ? 'bg-gradient-to-br from-amber-950 via-stone-900 to-stone-950 border-2 border-amber-600/40 shadow-black/80'
+      : 'bg-gradient-to-br from-amber-900 via-amber-800 to-amber-950 border-2 border-amber-500/50 shadow-amber-950/40';
+    cornerInlayColor = 'border-amber-400/80';
+    gridSurfaceClass = isDark ? 'border-amber-600/30 bg-stone-950 shadow-inner' : 'border-amber-700/30 bg-amber-50 shadow-inner';
+  }
+
   return (
     <div className="relative w-full max-w-[620px] aspect-square mx-auto select-none">
-      {/* Outer Luxury Mahogany Wooden Frame with Brass Accents */}
+      {/* Outer Themed Frame */}
       <div
-        className={`w-full h-full p-2.5 sm:p-3.5 rounded-2xl sm:rounded-3xl shadow-2xl transition-colors duration-300 relative ${
-          isDark
-            ? 'bg-gradient-to-br from-amber-950 via-stone-900 to-stone-950 border-2 border-amber-600/40 shadow-black/80'
-            : 'bg-gradient-to-br from-amber-900 via-amber-800 to-amber-950 border-2 border-amber-500/50 shadow-amber-950/40'
-        }`}
-        style={{
-          boxShadow: isDark
-            ? '0 25px 50px -12px rgba(0, 0, 0, 0.75), inset 0 2px 4px rgba(245, 158, 11, 0.2)'
-            : '0 20px 45px -10px rgba(120, 53, 15, 0.5), inset 0 2px 4px rgba(254, 243, 199, 0.3)',
-        }}
+        className={`w-full h-full p-2.5 sm:p-3.5 rounded-2xl sm:rounded-3xl shadow-2xl transition-all duration-300 relative ${outerFrameClass}`}
       >
-        {/* Brass Corner Inlays */}
-        <div className="absolute top-1.5 left-1.5 w-3 h-3 border-t-2 border-l-2 border-amber-400/80 rounded-tl-sm pointer-events-none" />
-        <div className="absolute top-1.5 right-1.5 w-3 h-3 border-t-2 border-r-2 border-amber-400/80 rounded-tr-sm pointer-events-none" />
-        <div className="absolute bottom-1.5 left-1.5 w-3 h-3 border-b-2 border-l-2 border-amber-400/80 rounded-bl-sm pointer-events-none" />
-        <div className="absolute bottom-1.5 right-1.5 w-3 h-3 border-b-2 border-r-2 border-amber-400/80 rounded-br-sm pointer-events-none" />
+        {/* Themed Corner Inlays */}
+        <div className={`absolute top-1.5 left-1.5 w-3 h-3 border-t-2 border-l-2 ${cornerInlayColor} rounded-tl-sm pointer-events-none`} />
+        <div className={`absolute top-1.5 right-1.5 w-3 h-3 border-t-2 border-r-2 ${cornerInlayColor} rounded-tr-sm pointer-events-none`} />
+        <div className={`absolute bottom-1.5 left-1.5 w-3 h-3 border-b-2 border-l-2 ${cornerInlayColor} rounded-bl-sm pointer-events-none`} />
+        <div className={`absolute bottom-1.5 right-1.5 w-3 h-3 border-b-2 border-r-2 ${cornerInlayColor} rounded-br-sm pointer-events-none`} />
 
         {/* Board Playing Surface */}
         <div
-          className={`relative w-full h-full rounded-xl sm:rounded-2xl overflow-hidden grid grid-cols-10 grid-rows-10 border transition-colors duration-300 ${
-            isDark
-              ? 'border-amber-600/30 bg-stone-950 shadow-inner'
-              : 'border-amber-700/30 bg-amber-50 shadow-inner'
-          }`}
+          className={`relative w-full h-full rounded-xl sm:rounded-2xl overflow-hidden grid grid-cols-10 grid-rows-10 border transition-colors duration-300 ${gridSurfaceClass}`}
         >
           {/* 100 Board Cells */}
           {tiles.map((num) => {
@@ -128,6 +149,22 @@ export const Board: React.FC<BoardProps> = ({
               cellStyle = isDark
                 ? 'bg-gradient-to-br from-amber-700/80 via-yellow-600/70 to-amber-900/90 text-amber-100 border-amber-400/60 shadow-inner'
                 : 'bg-gradient-to-br from-amber-200 via-yellow-300 to-amber-300 text-amber-950 border-amber-400 shadow-inner';
+            } else if (boardTheme === 'midnight_neon') {
+              cellStyle = isAlternate
+                ? 'bg-[#0f172a] text-cyan-200 border-cyan-900/50'
+                : 'bg-[#090d16] text-cyan-400 border-cyan-900/30';
+            } else if (boardTheme === 'emerald_jungle') {
+              cellStyle = isAlternate
+                ? 'bg-[#064e3b]/90 text-emerald-100 border-emerald-700/40'
+                : 'bg-[#022c22]/90 text-emerald-300 border-emerald-800/40';
+            } else if (boardTheme === 'golden_palace') {
+              cellStyle = isDark
+                ? isAlternate ? 'bg-[#3b2308] text-amber-200 border-amber-800/50' : 'bg-[#241505] text-amber-400 border-amber-900/50'
+                : isAlternate ? 'bg-[#fef3c7] text-amber-950 border-amber-300/80' : 'bg-[#fffbeb] text-amber-900 border-amber-200/60';
+            } else if (boardTheme === 'candy_retro') {
+              cellStyle = isDark
+                ? isAlternate ? 'bg-[#3b0764] text-fuchsia-200 border-fuchsia-800/50' : 'bg-[#240342] text-pink-300 border-fuchsia-900/50'
+                : isAlternate ? 'bg-[#fae8ff] text-purple-950 border-fuchsia-200/80' : 'bg-[#fdf4ff] text-pink-900 border-pink-200/60';
             } else if (isDark) {
               cellStyle = isAlternate
                 ? 'bg-stone-900/90 text-stone-200 border-stone-800/80'
@@ -758,7 +795,7 @@ export const Board: React.FC<BoardProps> = ({
                     : 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
                 }}
               >
-                <Goti player={player} isActive={isActive} size={28} />
+                <Goti player={player} isActive={isActive} size={28} gotiStyle={gotiStyle} />
               </div>
             );
           })}

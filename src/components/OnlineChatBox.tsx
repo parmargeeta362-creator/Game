@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, MessageCircle, X, Sparkles } from 'lucide-react';
+import { Send, MessageCircle, CheckCheck } from 'lucide-react';
 import { ChatMessage, UserProfile } from '../types/game';
 
 interface OnlineChatBoxProps {
@@ -48,40 +48,70 @@ export const OnlineChatBox: React.FC<OnlineChatBoxProps> = ({
 
   return (
     <div
-      className={`flex flex-col rounded-2xl border overflow-hidden transition-colors ${
-        isCompact ? 'h-56 sm:h-64' : 'h-64 sm:h-72'
+      className={`flex flex-col rounded-3xl border overflow-hidden transition-all shadow-xl ${
+        isCompact ? 'h-64 sm:h-72' : 'h-72 sm:h-80'
       } ${
         isDark
-          ? 'bg-stone-950/80 border-stone-800 text-stone-100'
-          : 'bg-white/95 border-amber-200 text-stone-900 shadow-sm'
+          ? 'bg-[#0b141a] border-emerald-950/80 text-stone-100'
+          : 'bg-[#efeae2] border-emerald-200 text-stone-900'
       }`}
     >
-      {/* Chat Header */}
+      {/* WhatsApp Style Chat Header */}
       <div
-        className={`px-3 py-2 border-b flex items-center justify-between shrink-0 ${
-          isDark ? 'border-stone-800/80 bg-stone-900/60' : 'border-amber-200/80 bg-amber-50/80'
+        className={`px-3.5 py-2.5 border-b flex items-center justify-between shrink-0 shadow-xs ${
+          isDark
+            ? 'border-stone-800 bg-[#202c33] text-stone-100'
+            : 'border-emerald-300/60 bg-[#008069] text-white'
         }`}
       >
-        <div className="flex items-center gap-1.5">
-          <MessageCircle size={14} className="text-amber-400" />
-          <span className="text-xs font-bold uppercase tracking-wider">Room Chat</span>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-400 flex items-center justify-center text-xs font-bold">
+              💬
+            </div>
+            <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-400 ring-1 ring-stone-900" />
+          </div>
+          <div>
+            <div className="text-xs font-bold flex items-center gap-1.5 leading-none">
+              <span>Game Room Chat</span>
+            </div>
+            <p className="text-[10px] opacity-75 font-medium mt-0.5">Online • Real-time Sync</p>
+          </div>
         </div>
-        <span className="text-[10px] opacity-60 font-mono">
-          {messages.length} {messages.length === 1 ? 'message' : 'messages'}
+        <span
+          className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+            isDark ? 'bg-stone-800/80 text-emerald-400' : 'bg-emerald-800/60 text-emerald-100'
+          }`}
+        >
+          {messages.length} msgs
         </span>
       </div>
 
-      {/* Messages Scroll Area */}
-      <div className="flex-1 p-2.5 overflow-y-auto space-y-2 text-xs">
+      {/* WhatsApp Messages Scroll Area */}
+      <div
+        className={`flex-1 p-3 overflow-y-auto space-y-3 text-xs ${
+          isDark
+            ? 'bg-[#0b141a] bg-[radial-gradient(#1f2c34_1px,transparent_1px)] [background-size:16px_16px]'
+            : 'bg-[#efeae2] bg-[radial-gradient(#e1dbd1_1px,transparent_1px)] [background-size:16px_16px]'
+        }`}
+      >
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center opacity-50 p-3">
-            <span className="text-xl mb-1">💬</span>
-            <p className="text-[11px]">No messages yet in this room.</p>
-            <p className="text-[10px] mt-0.5">Send a greeting or tap a quick phrase below!</p>
+          <div className="h-full flex flex-col items-center justify-center text-center opacity-60 p-4">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 flex items-center justify-center text-xl mb-1.5 border border-emerald-500/30">
+              💬
+            </div>
+            <p className="text-xs font-bold">No messages yet</p>
+            <p className="text-[11px] opacity-70 mt-0.5">Say hello to the other player!</p>
           </div>
         ) : (
           messages.map((msg) => {
-            const isMe = msg.senderId === currentUser.id;
+            // Determine if message is from the current user
+            const isMe =
+              msg.senderId === currentUser.id ||
+              msg.senderId.startsWith(currentUser.id) ||
+              (msg.senderName === currentUser.name &&
+                (!msg.senderAvatar || msg.senderAvatar === currentUser.photoUrl));
+
             const timeStr = new Date(msg.timestamp).toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit',
@@ -90,28 +120,78 @@ export const OnlineChatBox: React.FC<OnlineChatBoxProps> = ({
             return (
               <div
                 key={msg.id}
-                className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}
               >
-                <div className="flex items-center gap-1 mb-0.5 px-1">
-                  {!isMe && (
-                    <span className="text-[10px] font-bold text-amber-400">
-                      {msg.senderName}
-                    </span>
-                  )}
-                  <span className="text-[9px] opacity-50 font-mono">{timeStr}</span>
-                </div>
+                {/* 1. SAAMNE WALA (Other Player) -> PHOTO ON LEFT SIDE */}
+                {!isMe && (
+                  <div className="shrink-0 mb-0.5">
+                    <div className="w-7 h-7 rounded-full overflow-hidden border-2 border-emerald-500/60 bg-stone-800 flex items-center justify-center shadow-sm">
+                      {msg.senderAvatar ? (
+                        <img
+                          src={msg.senderAvatar}
+                          alt={msg.senderName}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <span className="font-bold text-[10px] text-emerald-400">
+                          {msg.senderName.slice(0, 2).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
 
+                {/* Chat Bubble */}
                 <div
-                  className={`px-3 py-1.5 rounded-2xl max-w-[85%] break-words text-xs shadow-xs ${
+                  className={`max-w-[78%] sm:max-w-[72%] rounded-2xl px-3 py-1.5 shadow-sm text-xs break-words relative transition-all ${
                     isMe
-                      ? 'bg-amber-500 text-stone-950 font-medium rounded-tr-xs'
+                      ? isDark
+                        ? 'bg-[#005c4b] text-white rounded-br-xs border border-emerald-600/30'
+                        : 'bg-[#d9fdd3] text-stone-900 rounded-br-xs border border-emerald-200'
                       : isDark
-                      ? 'bg-stone-800/90 text-stone-100 rounded-tl-xs border border-stone-700/60'
-                      : 'bg-stone-100 text-stone-900 rounded-tl-xs border border-stone-200'
+                      ? 'bg-[#202c33] text-stone-100 rounded-bl-xs border border-stone-700/60'
+                      : 'bg-white text-stone-900 rounded-bl-xs border border-stone-200/80 shadow-xs'
                   }`}
                 >
-                  {msg.text}
+                  {/* Sender Name for other player */}
+                  {!isMe && (
+                    <div className="text-[10px] font-bold text-amber-400 dark:text-emerald-400 leading-tight mb-0.5">
+                      {msg.senderName}
+                    </div>
+                  )}
+
+                  {/* Message Body */}
+                  <div className="leading-relaxed font-medium pr-8">{msg.text}</div>
+
+                  {/* Timestamp and WhatsApp Double Ticks */}
+                  <div className="flex items-center justify-end gap-1 mt-0.5 -mb-0.5 select-none text-[9px] opacity-65">
+                    <span>{timeStr}</span>
+                    {isMe && (
+                      <CheckCheck size={12} className="text-sky-400 inline stroke-[2.5]" />
+                    )}
+                  </div>
                 </div>
+
+                {/* 2. APNA MESSAGE (Current User) -> PHOTO ON RIGHT SIDE */}
+                {isMe && (
+                  <div className="shrink-0 mb-0.5">
+                    <div className="w-7 h-7 rounded-full overflow-hidden border-2 border-amber-400 bg-stone-800 flex items-center justify-center shadow-sm">
+                      {currentUser.photoUrl ? (
+                        <img
+                          src={currentUser.photoUrl}
+                          alt={currentUser.name}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <span className="font-bold text-[10px] text-amber-300">
+                          {currentUser.name.slice(0, 2).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })
@@ -119,10 +199,10 @@ export const OnlineChatBox: React.FC<OnlineChatBoxProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Phrases Bar */}
+      {/* WhatsApp Quick Phrases Chips */}
       <div
-        className={`px-2 py-1.5 border-t overflow-x-auto flex gap-1.5 shrink-0 scrollbar-none ${
-          isDark ? 'border-stone-800/70 bg-stone-900/40' : 'border-amber-100 bg-amber-50/50'
+        className={`px-2.5 py-1.5 border-t overflow-x-auto flex gap-1.5 shrink-0 scrollbar-none ${
+          isDark ? 'border-stone-800 bg-[#111b21]' : 'border-stone-200 bg-[#f0f2f5]'
         }`}
       >
         {QUICK_PHRASES.map((phrase) => (
@@ -130,10 +210,10 @@ export const OnlineChatBox: React.FC<OnlineChatBoxProps> = ({
             key={phrase}
             type="button"
             onClick={() => handleQuickSend(phrase)}
-            className={`px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap transition-colors shrink-0 cursor-pointer ${
+            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap transition-colors shrink-0 cursor-pointer active:scale-95 ${
               isDark
-                ? 'bg-stone-800/90 hover:bg-stone-700 text-stone-300'
-                : 'bg-stone-200/80 hover:bg-stone-300 text-stone-700'
+                ? 'bg-[#202c33] hover:bg-stone-700 text-stone-200 border border-stone-700/60'
+                : 'bg-white hover:bg-stone-100 text-stone-700 border border-stone-300 shadow-xs'
             }`}
           >
             {phrase}
@@ -141,11 +221,11 @@ export const OnlineChatBox: React.FC<OnlineChatBoxProps> = ({
         ))}
       </div>
 
-      {/* Input Bar */}
+      {/* WhatsApp Style Input Bar */}
       <form
         onSubmit={handleSend}
-        className={`p-2 border-t flex items-center gap-1.5 shrink-0 ${
-          isDark ? 'border-stone-800 bg-stone-900/80' : 'border-amber-200 bg-white'
+        className={`p-2 border-t flex items-center gap-2 shrink-0 ${
+          isDark ? 'border-stone-800 bg-[#202c33]' : 'border-stone-200 bg-[#f0f2f5]'
         }`}
       >
         <input
@@ -153,26 +233,26 @@ export const OnlineChatBox: React.FC<OnlineChatBoxProps> = ({
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           maxLength={140}
-          placeholder="Say something to room..."
-          className={`flex-1 rounded-xl px-3 py-1.5 text-xs border focus:outline-none focus:ring-1 focus:ring-amber-400 font-medium ${
+          placeholder="Type a message..."
+          className={`flex-1 rounded-full px-4 py-2 text-xs border focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium ${
             isDark
-              ? 'bg-stone-800/80 border-stone-700 text-white placeholder-stone-500'
-              : 'bg-stone-50 border-stone-300 text-stone-900 placeholder-stone-400'
+              ? 'bg-[#2a3942] border-transparent text-white placeholder-stone-400'
+              : 'bg-white border-stone-300 text-stone-900 placeholder-stone-500 shadow-xs'
           }`}
         />
         <button
           type="submit"
           disabled={!inputText.trim()}
-          className={`p-2 rounded-xl transition-all flex items-center justify-center shrink-0 cursor-pointer ${
+          className={`p-2.5 rounded-full transition-all flex items-center justify-center shrink-0 cursor-pointer ${
             inputText.trim()
-              ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 shadow-md'
+              ? 'bg-[#00a884] hover:bg-[#008f6f] text-white shadow-md active:scale-95'
               : isDark
               ? 'bg-stone-800 text-stone-600 cursor-not-allowed'
-              : 'bg-stone-200 text-stone-400 cursor-not-allowed'
+              : 'bg-stone-300 text-stone-400 cursor-not-allowed'
           }`}
           title="Send message"
         >
-          <Send size={13} />
+          <Send size={14} />
         </button>
       </form>
     </div>

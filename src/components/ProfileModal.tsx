@@ -15,8 +15,12 @@ import {
   Sparkles,
   Award,
   Crown,
+  Swords,
+  History,
+  Trash2,
+  ChevronRight,
 } from 'lucide-react';
-import { UserProfile } from '../types/game';
+import { UserProfile, MatchRecord } from '../types/game';
 import {
   savePlayerProfile,
   checkSupabaseConnection,
@@ -82,8 +86,42 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [authError, setAuthError] = useState<string | null>(null);
   const [showSqlSetup, setShowSqlSetup] = useState(false);
   const [hasCopiedSql, setHasCopiedSql] = useState(false);
-  const [activeTab, setActiveTab] = useState<'profile' | 'customize' | 'stats' | 'database'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'history' | 'customize' | 'stats' | 'database'>('profile');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const matchRecords: MatchRecord[] = profile.matchHistory || [];
+
+  const handleClearHistory = () => {
+    const updated = { ...profile, matchHistory: [] };
+    onUpdateProfile(updated);
+    try {
+      localStorage.removeItem('snakes_ladders_match_history');
+      localStorage.setItem('snakes_ladders_user_profile', JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleAddSampleMatch = () => {
+    const sample: MatchRecord = {
+      id: 'demo_' + Date.now(),
+      timestamp: Date.now() - 1000 * 60 * 12,
+      mode: 'online',
+      result: 'won',
+      winnerName: profile.name || 'You',
+      opponentNames: ['Manu (Opponent)'],
+      totalTurns: 27,
+      ladderCount: 2,
+      snakeCount: 0,
+    };
+    const updated = {
+      ...profile,
+      matchHistory: [sample, ...(profile.matchHistory || [])],
+    };
+    onUpdateProfile(updated);
+    try {
+      localStorage.setItem('snakes_ladders_match_history', JSON.stringify(updated.matchHistory));
+      localStorage.setItem('snakes_ladders_user_profile', JSON.stringify(updated));
+    } catch {}
+  };
 
   useEffect(() => {
     setName(profile.name);
@@ -326,11 +364,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </div>
         </div>
 
-        {/* TAB NAVIGATION: Profile, Customize, Stats, Database */}
+        {/* TAB NAVIGATION: Profile, Match Results, Customize, Stats, Database */}
         <div className="px-5 sm:px-6 pt-2 pb-1 border-b border-stone-700/30 shrink-0">
           <div className="flex gap-1.5 sm:gap-2 overflow-x-auto">
             {[
               { id: 'profile', label: 'Identity' },
+              {
+                id: 'history',
+                label: 'Match Log',
+                badge: matchRecords.length > 0 ? matchRecords.length : undefined,
+              },
               { id: 'customize', label: 'Frames & Titles' },
               { id: 'stats', label: 'Stats & XP' },
               { id: 'database', label: 'Database' },
@@ -339,7 +382,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 key={t.id}
                 type="button"
                 onClick={() => setActiveTab(t.id as typeof activeTab)}
-                className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${
+                className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
                   activeTab === t.id
                     ? 'bg-amber-500 text-stone-950 shadow-sm'
                     : isDark
@@ -347,7 +390,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                     : 'text-stone-600 hover:text-stone-900'
                 }`}
               >
-                {t.label}
+                <span>{t.label}</span>
+                {t.badge !== undefined && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold leading-none ${
+                      activeTab === t.id
+                        ? 'bg-stone-950 text-amber-400'
+                        : isDark
+                        ? 'bg-stone-800 text-stone-300'
+                        : 'bg-stone-200 text-stone-700'
+                    }`}
+                  >
+                    {t.badge}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -555,7 +611,168 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: CUSTOMIZE FRAMES & TITLES (Just like real games!) */}
+          {/* TAB 2: RECENT MATCH RESULTS LOG */}
+          {activeTab === 'history' && (
+            <div className="space-y-3 animate-fade-in">
+              {/* Summary Stats Header Card */}
+              <div
+                className={`p-3.5 rounded-2xl border flex items-center justify-between ${
+                  isDark ? 'bg-stone-950/60 border-stone-800' : 'bg-white border-amber-200 shadow-sm'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-500 flex items-center justify-center font-bold">
+                    <Swords size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold font-display">Recent Match Results</h3>
+                    <p className="text-[10px] opacity-70">
+                      Opponents, turns & win/loss records
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <div className="text-xs font-extrabold font-mono flex items-center gap-1.5 justify-end">
+                      <span className="text-emerald-400 font-black">
+                        {matchRecords.filter((m) => m.result === 'won').length}W
+                      </span>
+                      <span className="opacity-30">/</span>
+                      <span className="text-rose-400 font-black">
+                        {matchRecords.filter((m) => m.result === 'lost').length}L
+                      </span>
+                    </div>
+                    <span className="text-[10px] opacity-60">Record</span>
+                  </div>
+
+                  {matchRecords.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearHistory}
+                      className="p-1.5 rounded-lg text-stone-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                      title="Clear History"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Match Results List */}
+              {matchRecords.length === 0 ? (
+                <div
+                  className={`p-6 rounded-2xl border text-center flex flex-col items-center justify-center ${
+                    isDark ? 'bg-stone-950/40 border-stone-800' : 'bg-white/60 border-amber-200'
+                  }`}
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center text-2xl mb-2 border border-amber-500/20">
+                    <Swords size={22} />
+                  </div>
+                  <p className="text-xs font-bold">No match results logged yet</p>
+                  <p className="text-[11px] opacity-70 max-w-xs mt-1 leading-relaxed">
+                    Finish a local match against bots or an online multiplayer match to see your opponent names, turn counts, and win/loss status here!
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleAddSampleMatch}
+                    className="mt-3.5 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Add Sample Match Demo
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[46vh] overflow-y-auto pr-0.5">
+                  {matchRecords.map((match) => {
+                    const isWin = match.result === 'won';
+                    const timeStr = new Date(match.timestamp).toLocaleDateString([], {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
+
+                    return (
+                      <div
+                        key={match.id}
+                        className={`p-3 rounded-2xl border transition-all ${
+                          isWin
+                            ? isDark
+                              ? 'bg-emerald-950/20 border-emerald-800/40 hover:border-emerald-700/60'
+                              : 'bg-emerald-50/80 border-emerald-200 hover:border-emerald-300'
+                            : isDark
+                            ? 'bg-stone-950/60 border-stone-800/80 hover:border-stone-700'
+                            : 'bg-white border-stone-200 hover:border-stone-300'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-2.5 min-w-0">
+                            {/* Win/Loss Badge */}
+                            <span
+                              className={`px-2.5 py-1 rounded-xl text-[11px] font-black tracking-wide shrink-0 flex items-center gap-1 border ${
+                                isWin
+                                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-xs'
+                                  : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                              }`}
+                            >
+                              {isWin ? (
+                                <>
+                                  <Trophy size={12} className="text-amber-400" />
+                                  <span>WON</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span>❌</span>
+                                  <span>LOST</span>
+                                </>
+                              )}
+                            </span>
+
+                            {/* Opponents & Winner Details */}
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold flex items-center gap-1.5 flex-wrap">
+                                <span className="opacity-60 text-[10px] font-medium">Opponents:</span>
+                                <span className="text-amber-400 font-display">
+                                  {match.opponentNames && match.opponentNames.length > 0
+                                    ? match.opponentNames.join(', ')
+                                    : 'Player 2'}
+                                </span>
+                              </div>
+
+                              <div className="text-[11px] opacity-75 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                <span>Winner:</span>
+                                <span className="font-semibold text-stone-200 dark:text-stone-100">
+                                  {match.winnerName}
+                                </span>
+                                <span className="opacity-40">•</span>
+                                <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-stone-500/20 font-medium">
+                                  {match.mode === 'online' ? '🌐 Online Room' : '🤖 Local Match'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Stats Column */}
+                          <div className="text-right shrink-0">
+                            <div className="text-xs font-mono font-bold">
+                              {match.totalTurns} turns
+                            </div>
+                            <div className="text-[10px] opacity-65 flex items-center justify-end gap-1.5 mt-0.5">
+                              <span>🪜 {match.ladderCount || 0}</span>
+                              <span>🐍 {match.snakeCount || 0}</span>
+                            </div>
+                            <div className="text-[9px] opacity-50 font-mono mt-0.5">{timeStr}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: CUSTOMIZE FRAMES & TITLES (Just like real games!) */}
           {activeTab === 'customize' && (
             <div className="space-y-4">
               {/* AVATAR FRAME SELECTOR */}
@@ -690,6 +907,33 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   <span className="text-sm font-black font-display text-purple-400 mt-1 block">
                     {profile.wins > 5 ? 'Master' : profile.wins > 1 ? 'Challenger' : 'Rookie'}
                   </span>
+                </div>
+              </div>
+
+              {/* Quick Link to Recent Match Results Log */}
+              <div
+                onClick={() => setActiveTab('history')}
+                className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] ${
+                  isDark
+                    ? 'bg-stone-950/60 border-stone-800 hover:border-amber-500/50'
+                    : 'bg-white border-amber-200 hover:border-amber-400 shadow-xs'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-500 flex items-center justify-center font-bold">
+                    <Swords size={16} />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold block">View Recent Match Results</span>
+                    <span className="text-[10px] opacity-70">
+                      {matchRecords.length} {matchRecords.length === 1 ? 'record' : 'records'} logged with opponents & win/loss status
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 text-xs font-bold text-amber-500 shrink-0">
+                  <span>View Log</span>
+                  <ChevronRight size={14} />
                 </div>
               </div>
             </div>

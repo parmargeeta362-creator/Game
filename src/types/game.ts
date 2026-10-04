@@ -21,6 +21,18 @@ export interface Player {
   onlineUserId?: string; // for multiplayer matching
 }
 
+export interface MatchRecord {
+  id: string;
+  timestamp: number;
+  mode: 'online' | 'local';
+  result: 'won' | 'lost';
+  winnerName: string;
+  opponentNames: string[];
+  totalTurns: number;
+  ladderCount: number;
+  snakeCount: number;
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -33,6 +45,7 @@ export interface UserProfile {
   title: string; // player title / tag
   level: number;
   xp: number;
+  matchHistory?: MatchRecord[];
 }
 
 export interface OnlineRoom {
@@ -57,6 +70,7 @@ export interface RoomBroadcastEvent {
     | 'PLAYER_JOINED'
     | 'GAME_START'
     | 'ROLL_DICE'
+    | 'GAME_WIN'
     | 'SYNC_STATE'
     | 'EMOJI_REACTION'
     | 'CHAT_MESSAGE';
@@ -81,6 +95,9 @@ export interface Ladder {
 
 export type WinCondition = 'exact_bounce' | 'exact_stay' | 'reach_or_pass';
 export type ThemeMode = 'light' | 'dark' | 'system';
+export type BoardTheme = 'classic_wood' | 'midnight_neon' | 'emerald_jungle' | 'golden_palace' | 'candy_retro';
+export type DiceStyle = 'classic_ivory' | 'golden_metal' | 'ruby_crystal' | 'midnight_obsidian' | 'emerald_jade';
+export type GotiStyle = 'classic_pawn' | 'crown_monarch' | 'crystal_gem' | 'modern_pin';
 
 export interface GameSettings {
   playerCount: number;
@@ -89,6 +106,9 @@ export interface GameSettings {
   moveSpeedMs: number; // duration per step
   soundEnabled: boolean;
   theme: ThemeMode;
+  boardTheme: BoardTheme;
+  diceStyle: DiceStyle;
+  gotiStyle: GotiStyle;
 }
 
 export interface GameLogEntry {

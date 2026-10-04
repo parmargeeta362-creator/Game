@@ -103,7 +103,7 @@ export async function fetchPlayerProfile(id: string): Promise<UserProfile | null
       .maybeSingle();
 
     if (error) {
-      console.warn('Supabase fetch notice:', error.message);
+      // Optional remote profile lookup fallback
       return null;
     }
 
@@ -123,8 +123,7 @@ export async function fetchPlayerProfile(id: string): Promise<UserProfile | null
       };
     }
     return null;
-  } catch (err) {
-    console.warn('Supabase fetch exception:', err);
+  } catch {
     return null;
   }
 }

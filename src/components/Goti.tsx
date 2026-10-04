@@ -1,13 +1,14 @@
 import React from 'react';
-import { Player } from '../types/game';
+import { Player, GotiStyle } from '../types/game';
 
 interface GotiProps {
   player: Player;
   isActive: boolean;
   size?: number; // width in pixels, default 30
+  gotiStyle?: GotiStyle;
 }
 
-export const Goti: React.FC<GotiProps> = ({ player, isActive, size = 32 }) => {
+export const Goti: React.FC<GotiProps> = ({ player, isActive, size = 32, gotiStyle = 'classic_pawn' }) => {
   // Height is proportional (~1.3x width for classic pawn aspect ratio)
   const height = Math.round(size * 1.35);
 
@@ -175,6 +176,41 @@ export const Goti: React.FC<GotiProps> = ({ player, isActive, size = 32 }) => {
             fill="#ffffff"
             opacity="0.25"
           />
+
+          {/* Goti Style Toppers & Accents */}
+          {gotiStyle === 'crown_monarch' && (
+            <g>
+              {/* Royal Golden Crown Topper */}
+              <path
+                d="M 12,4 L 13.5,0.8 L 15.5,2.4 L 18,-0.2 L 20.5,2.4 L 22.5,0.8 L 24,4 Z"
+                fill="#fbbf24"
+                stroke="#b45309"
+                strokeWidth="0.5"
+              />
+              <circle cx="18" cy="-0.2" r="0.8" fill="#ef4444" />
+              <circle cx="13.5" cy="0.8" r="0.6" fill="#38bdf8" />
+              <circle cx="22.5" cy="0.8" r="0.6" fill="#38bdf8" />
+            </g>
+          )}
+
+          {gotiStyle === 'crystal_gem' && (
+            <g opacity="0.7">
+              {/* Prismatic crystalline facets */}
+              <polygon points="18,3.5 24,10 18,17 12,10" fill="#ffffff" opacity="0.35" />
+              <line x1="18" y1="3.5" x2="18" y2="17" stroke="#ffffff" strokeWidth="0.6" />
+              <line x1="12" y1="10" x2="24" y2="10" stroke="#ffffff" strokeWidth="0.6" />
+              <polygon points="18,24 24,32 18,38 12,32" fill="#ffffff" opacity="0.25" />
+            </g>
+          )}
+
+          {gotiStyle === 'modern_pin' && (
+            <g>
+              {/* Futuristic cyber ring collar */}
+              <ellipse cx="18" cy="11.5" rx="10.5" ry="3.5" fill="none" stroke="#38bdf8" strokeWidth="0.9" opacity="0.9" />
+              <circle cx="18" cy="11.5" r="2.5" fill="#38bdf8" opacity="0.9" />
+              <circle cx="18" cy="11.5" r="1.2" fill="#ffffff" />
+            </g>
+          )}
 
           {/* Player Identifier Tag / Photo on goti body */}
           {player.frame && player.frame !== 'none' && (

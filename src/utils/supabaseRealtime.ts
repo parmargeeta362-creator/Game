@@ -121,20 +121,18 @@ export function joinRoomChannel(
     if (status === 'SUBSCRIBED') {
       try {
         await channel.track(userPresence);
-      } catch (err) {
-        console.warn('Presence track error:', err);
-      }
+      } catch {}
 
-      // Broadcast join event in multi-waves to guarantee instant peer discovery
+      // Broadcast join event in waves with slight tick so channel state is fully established
       const sendJoin = async () => {
         try {
           await broadcastRoomEvent(channel, 'PLAYER_JOINED', userPresence, userPresence.userId);
         } catch {}
       };
 
-      await sendJoin();
-      setTimeout(sendJoin, 300);
-      setTimeout(sendJoin, 900);
+      setTimeout(sendJoin, 150);
+      setTimeout(sendJoin, 550);
+      setTimeout(sendJoin, 1100);
     }
   });
 
@@ -157,11 +155,27 @@ export async function broadcastRoomEvent(
     timestamp: Date.now(),
   };
 
-  await channel.send({
-    type: 'broadcast',
-    event: 'GAME_EVENT',
-    payload: eventData,
-  });
+  try {
+    if (channel.state === 'joined') {
+      await channel.send({
+        type: 'broadcast',
+        event: 'GAME_EVENT',
+        payload: eventData,
+      });
+    } else if (typeof (channel as any).httpSend === 'function') {
+      await (channel as any).httpSend({
+        type: 'broadcast',
+        event: 'GAME_EVENT',
+        payload: eventData,
+      });
+    } else {
+      await channel.send({
+        type: 'broadcast',
+        event: 'GAME_EVENT',
+        payload: eventData,
+      });
+    }
+  } catch {}
 }
 
 /**
